@@ -5,18 +5,20 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (build and twine check only)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
-  id-token: write # REQUIRED for Trusted Publishing (OIDC)
 
 jobs:
   publish:
     name: Build, Validate & Publish to PyPI
     runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/p/dcd-storage-client
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -29,10 +31,18 @@ jobs:
       - name: Run Unit Tests
         run: python -m unittest discover -s tests -p "test_*.py" -v
 
-      - name: Build sdist and wheel
-        run: |
-          pip install build
-          python -m build
+      - name: Install build & upload tools
+        run: pip install build twine
 
-      - name: Publish package distributions to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Validate distribution files
+        run: twine check dist/*
+
+      - name: Publish to PyPI
+        if: ${{ inputs.dry_run != true }}
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: twine upload dist/* --non-interactive --skip-existing
